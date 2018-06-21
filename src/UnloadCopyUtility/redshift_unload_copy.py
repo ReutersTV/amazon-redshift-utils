@@ -24,7 +24,7 @@ import sys
 import logging
 from global_config import GlobalConfigParametersReader, config_parameters
 from util.s3_utils import S3Helper, S3Details
-from util.resources import ResourceFactory, TableResource, DBResource
+from util.resources import ResourceFactory, TableResource, SchemaResource, DBResource
 from util.tasks import TaskManager, FailIfResourceDoesNotExistsTask, CreateIfTargetDoesNotExistTask, \
     FailIfResourceClusterDoesNotExistsTask, UnloadDataToS3Task, CopyDataFromS3Task, CleanupS3StagingAreaTask, \
     NoOperationTask
@@ -96,7 +96,16 @@ class UnloadCopyTool:
             else:
                 logging.fatal('Destination should be a database resource')
                 raise NotImplementedError
-            pass
+        elif isinstance(source, SchemaResource):
+            if not isinstance(destination, DBResource):
+                logging.fatal('Destination should be a database resource')
+                raise NotImplementedError
+            self.add_schema_migration(source, destination, global_config_values)
+        elif isinstance(source, DBResource):
+            if not isinstance(destination, DBResource):
+                logging.fatal('Destination should be a database resource')
+                raise NotImplementedError
+            self.add_database_migration(source, destination, global_config_values)
         else:
             # TODO: add additional scenario's
             # For example if both resources are of type schema then create target schema and migrate all tables
@@ -104,6 +113,19 @@ class UnloadCopyTool:
             raise NotImplementedError
 
         self.task_manager.run()
+
+    def add_database_migration(self, source, destination, global_config_values):
+        schemas = source.list_schemas()
+        for schema in schemas:
+            source_schema = SchemaResource(source.get_cluster(), schema)
+            self.add_schema_migration(source_schema, destination, global_config_values)
+
+    def add_schema_migration(self, source, destination, global_config_values):
+        tables = source.list_tables()
+        for table in tables:
+            source_table = TableResource(source.get_cluster(), source.get_schema(), table)
+            target_table = ResourceFactory.get_table_resource_from_merging_2_resources(destination, source_table)
+            self.add_table_migration(source_table, target_table, global_config_values)
 
     def add_table_migration(self, source, destination, global_config_values):
         if global_config_values['connectionPreTest']:

@@ -128,6 +128,9 @@ class Resource(object):
 
 
 class DBResource(Resource):
+
+    list_schemas_stmt = """SELECT DISTINCT(schemaname) FROM pg_tables"""
+
     def clone_structure_from(self, other):
         ddl = other.get_create_sql(generate=True)
         if self.get_db() != other.get_db():
@@ -148,6 +151,7 @@ class DBResource(Resource):
         """
         Resource.__init__(self)
         self.commands = {}
+        self.commands['list_schemas'] = DBResource.list_schemas_stmt
         self._cluster = rs_cluster
         self.name = None
         self.owner = None
@@ -213,18 +217,33 @@ class DBResource(Resource):
         if 'region' in command_parameters and command == 'copy_table' and command_parameters['region'] is not None:
             command_to_execute += " REGION '{region}' "
         update_sql_command = command_to_execute.format(**command_parameters)
-        logging.info('Executing {command} against {resource}:'.format(command=command, resource=self))
+        logging.info('Executing command {command} against {resource}:'.format(command=command, resource=self))
         logging.info(GET_SAFE_LOG_STRING(update_sql_command))
         self.get_cluster().execute_update(update_sql_command)
 
+    def run_query_against_resource(self, command, command_parameters=None):
+        command_parameters = command_parameters or dict()
+        command_parameters['cluster'] = self.get_cluster()
+        command_to_execute = self.commands[command]
+        update_sql_command = command_to_execute.format(**command_parameters)
+        logging.info('Executing query {command} against {resource}:'.format(command=command, resource=self))
+        logging.info(GET_SAFE_LOG_STRING(update_sql_command))
+        return self.get_cluster().get_query_full_result_as_list_of_dict(update_sql_command)
+
+    def list_schemas(self):
+        results = self.run_query_against_resource('list_schemas', {})
+        schemas = [x['schemaname'] for x in results]
+        return schemas
 
 class SchemaResource(DBResource, ChildObject):
 
     drop_schema_stmt = """DROP SCHEMA {schema_name}"""
+    list_tables_stmt = """SELECT DISTINCT(tablename) FROM pg_tables WHERE schemaname = '{schema_name}'"""
 
     def __init__(self, rs_cluster, schema):
         DBResource.__init__(self, rs_cluster)
         self.commands['drop_schema'] = SchemaResource.drop_schema_stmt
+        self.commands['list_tables'] = SchemaResource.list_tables_stmt
         self.parent = DBResource(rs_cluster)
         self._schema = schema
         self.get_name_owner_acl_sql = GET_SCHEMA_NAME_OWNER_ACL
@@ -260,8 +279,18 @@ class SchemaResource(DBResource, ChildObject):
         command_parameters['schema_name'] = self.get_schema()
         super(SchemaResource, self).run_command_against_resource(command, command_parameters)
 
+    def run_query_against_resource(self, command, command_parameters=None):
+        command_parameters = command_parameters or dict()
+        command_parameters['schema_name'] = self.get_schema()
+        return super(SchemaResource, self).run_query_against_resource(command, command_parameters)
+
     def drop(self):
         self.run_command_against_resource('drop_schema', {})
+
+    def list_tables(self):
+        results = self.run_query_against_resource('list_tables', {})
+        tables = [x['tablename'] for x in results]
+        return tables
 
 
 class TableResource(SchemaResource):

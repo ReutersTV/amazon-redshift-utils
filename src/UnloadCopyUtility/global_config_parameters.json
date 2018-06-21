@@ -16,7 +16,7 @@
   },
   "destinationTableAutoCreate": {
     "description": "If True and target table does not exist create target table with same DDL as source table.  Schema-name and table-name will be altered to make sure to match target table definition in the s3ConfigFile.  At this time dependencies needed for table creation (e.g. in case of a foreign key) need to be present already.",
-    "value": "False",
+    "value": "True",
     "possibleValues": "True|False"
   },
   "destinationTableForceDropCreate": {
@@ -26,12 +26,12 @@
   },
   "destinationSchemaAutoCreate": {
     "description": "If True and a target schema does not exist create target schema with same DDL as source schema.",
-    "value": "False",
+    "value": "True",
     "possibleValues": "True|False"
   },
   "destinationDatabaseAutoCreate": {
     "description": "If True and database where target table will be placed does not exist then create target database with same DDL as source database.  This is used to copy databases.",
-    "value": "False",
+    "value": "True",
     "possibleValues": "True|False"
   },
   "logLevel":{
