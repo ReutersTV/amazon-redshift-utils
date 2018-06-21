@@ -129,7 +129,7 @@ class Resource(object):
 
 class DBResource(Resource):
 
-    list_schemas_stmt = """SELECT DISTINCT(schemaname) FROM pg_tables"""
+    list_schemas_stmt = """SELECT DISTINCT(schemaname) FROM pg_tables WHERE schemaname NOT LIKE 'pg_%' AND schemaname != 'information_schema'"""
 
     def clone_structure_from(self, other):
         ddl = other.get_create_sql(generate=True)
