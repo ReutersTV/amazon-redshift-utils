@@ -180,17 +180,8 @@ def set_log_level(log_level_string):
         logging.error('Could not find log_level {lvl}'.format(lvl=log_level_string))
         logging.basicConfig(level=logging.INFO)
     else:
-        stdout_handler = logging.StreamHandler(stream=sys.stdout)
-        stdout_handler.setLevel(logging.INFO)
-        formatter = logging.Formatter(
-            '[%(asctime)s] p%(process)s {%(pathname)s:%(lineno)d} %(levelname)s - %(message)s',
-            '%m-%d %H:%M:%S'
-        )
-        stderr_handler = logging.StreamHandler()
-        stderr_handler.setFormatter(formatter)
-        log_level = getattr(logging, log_level_string)
-        stderr_handler.setLevel(log_level)
-        logging.basicConfig(level=log_level, handlers=[stdout_handler, stderr_handler])
+        format_str = '[%(asctime)s] %(levelname)s - %(message)s'
+        logging.basicConfig(level=log_level_string, format=format_str)
         logging.debug('Log level set to {lvl}'.format(lvl=log_level_string))
 
 
