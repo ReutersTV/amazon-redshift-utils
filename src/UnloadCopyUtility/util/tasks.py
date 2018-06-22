@@ -67,12 +67,25 @@ class TaskManager(object):
                     self.remove_fulfilled_dependencies(task_id)
                     if len(self.tasks[task_id].dependencies) == 0:
                         task = self.tasks.pop(task_id)
-                        task_thread = TaskRunner(task)
-                        threads.append(task_thread)
-                        task_thread.setName(task.task_id)
-                        running += 1
-                        task_thread.start()
-                        break
+                        if isinstance(task, UnloadDataToS3Task) or isinstance(task, CopyDataFromS3Task):
+                            # This is a long running task, run it in a background thread
+                            task_thread = TaskRunner(task)
+                            threads.append(task_thread)
+                            task_thread.setName(task.task_id)
+                            running += 1
+                            task_thread.start()
+                            break
+                        else:
+                            # This is a short running task, run it in the main thread
+                            try:
+                                task.execute()
+                                self.mark_task_as_succeeded(task)
+                            except Exception as e:
+                                logging.warning(e)
+                                self.mark_task_as_failed(task)
+                                if config_parameters['failOnError']:
+                                    logging.fatal('Task {t} fails and failOnError is True.'.format(t=task))
+                                    sys.exit(2)
                     else:
                         logging.debug('Task {t} has {n} unmet dependencies.'.format(
                             t=self.tasks[task_id],
