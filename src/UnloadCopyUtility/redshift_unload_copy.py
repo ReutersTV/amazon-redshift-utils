@@ -112,7 +112,7 @@ class UnloadCopyTool:
             logging.fatal('Source is not a Table, this type of unload-copy is currently not supported.')
             raise NotImplementedError
 
-        self.task_manager.run()
+        self.task_manager.run(max_threads=4)
 
     def add_database_migration(self, source, destination, global_config_values):
         schemas = source.list_schemas()
@@ -123,8 +123,14 @@ class UnloadCopyTool:
     def add_schema_migration(self, source, destination, global_config_values):
         tables = source.list_tables()
         for table in tables:
-            source_table = TableResource(source.get_cluster(), source.get_schema(), table)
+            # Create an individual cluster instance for each task so that they can run in parallel
+            source_cluster = ResourceFactory.get_cluster_from_cluster_dict(self.config_helper.config['unloadSource'],self.region)
+            source_table = TableResource(source_cluster, source.get_schema(), table)
+
+            destination_cluster = ResourceFactory.get_cluster_from_cluster_dict(self.config_helper.config['copyTarget'], self.region)
             target_table = ResourceFactory.get_table_resource_from_merging_2_resources(destination, source_table)
+            target_table.set_cluster(destination_cluster)
+
             if 'explicit_ids' in self.config_helper.config['copyTarget']:
                 if self.config_helper.config['copyTarget']['explicit_ids']:
                     target_table.set_explicit_ids(True)
@@ -183,7 +189,7 @@ def set_log_level(log_level_string):
         logging.error('Could not find log_level {lvl}'.format(lvl=log_level_string))
         logging.basicConfig(level=logging.INFO)
     else:
-        format_str = '[%(asctime)s] %(levelname)s - %(message)s'
+        format_str = '[%(asctime)s] [%(threadName)s] %(levelname)s - %(message)s'
         logging.basicConfig(level=log_level_string, format=format_str)
         logging.debug('Log level set to {lvl}'.format(lvl=log_level_string))
 

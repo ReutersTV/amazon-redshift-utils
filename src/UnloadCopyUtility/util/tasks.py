@@ -7,7 +7,7 @@ import logging
 from global_config import config_parameters
 from util.resources import Resource
 from util.s3_utils import S3Helper
-
+from threading import Thread
 
 class TaskManager(object):
     def __init__(self):
@@ -42,31 +42,46 @@ class TaskManager(object):
         def __init__(self):
             super(TaskManager.DuplicateTaskException, self).__init__()
 
-    def run(self):
+    def run(self, max_threads=1):
+        running = 0
+        threads = []
         while len(self.tasks.keys()) > 0:
-            tasks_clone = self.tasks.copy()
-            for task_id in tasks_clone.keys():
-                self.remove_fulfilled_dependencies(task_id)
-                if len(self.tasks[task_id].dependencies) == 0:
-                    task = self.tasks.pop(task_id)
-                    # noinspection PyBroadException
-                    try:
-                        task.execute()
-                        self.mark_task_as_succeeded(task)
-                    except Exception as e:
-                        logging.warning(e)
-                        self.mark_task_as_failed(task)
+            completed = []
+            for thread in threads:
+                thread.run
+                if not thread.isAlive():
+                    completed.append(thread)
+                    if thread.succeeded:
+                        self.mark_task_as_succeeded(thread.task)
+                    else:
+                        self.mark_task_as_failed(thread.task)
                         if config_parameters['failOnError']:
                             logging.fatal('Task {t} fails and failOnError is True.'.format(t=task))
                             sys.exit(2)
-                else:
-                    logging.debug('Task {t} has {n} unmet dependencies.'.format(
-                        t=self.tasks[task_id],
-                        n=len(self.tasks[task_id].dependencies)
-                    ))
-                    for dependency in self.tasks[task_id].dependencies:
-                        logging.debug('\t{d}'.format(d=dependency))
-            time.sleep(1)
+            for thread in completed:
+                threads.remove(thread)
+                running -= 1
+            if running < max_threads:
+                tasks_clone = self.tasks.copy()
+                for task_id in tasks_clone.keys():
+                    self.remove_fulfilled_dependencies(task_id)
+                    if len(self.tasks[task_id].dependencies) == 0:
+                        task = self.tasks.pop(task_id)
+                        task_thread = TaskRunner(task)
+                        threads.append(task_thread)
+                        task_thread.setName(task.task_id)
+                        running += 1
+                        task_thread.start()
+                        break
+                    else:
+                        logging.debug('Task {t} has {n} unmet dependencies.'.format(
+                            t=self.tasks[task_id],
+                            n=len(self.tasks[task_id].dependencies)
+                        ))
+                        for dependency in self.tasks[task_id].dependencies:
+                            logging.debug('\t{d}'.format(d=dependency))
+            else:
+                time.sleep(0.1)
 
     def remove_fulfilled_dependencies(self, task_id):
         for dependency in self.tasks[task_id].dependencies.copy():
@@ -94,6 +109,18 @@ class TaskManager(object):
         self.completed_failed_tasks[task.task_id] = task
         logging.debug('All failed tasks: {tl}'.format(tl=self.completed_failed_tasks))
 
+class TaskRunner(Thread):
+    def __init__(self, task):
+        self.task = task
+        self.succeeded = False
+        super(TaskRunner, self).__init__()
+
+    def run(self):
+        try:
+            self.task.execute()
+            self.succeeded = True
+        except Exception as e:
+            logging.error(str(e))
 
 class DependencyList(list):
     def append(self, value):
