@@ -125,6 +125,9 @@ class UnloadCopyTool:
         for table in tables:
             source_table = TableResource(source.get_cluster(), source.get_schema(), table)
             target_table = ResourceFactory.get_table_resource_from_merging_2_resources(destination, source_table)
+            if 'explicit_ids' in self.config_helper.config['copyTarget']:
+                if self.config_helper.config['copyTarget']['explicit_ids']:
+                    target_table.set_explicit_ids(True)
             self.add_table_migration(source_table, target_table, global_config_values)
 
     def add_table_migration(self, source, destination, global_config_values):
