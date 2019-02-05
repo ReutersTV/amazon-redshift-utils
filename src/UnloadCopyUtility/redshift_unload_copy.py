@@ -126,17 +126,16 @@ class UnloadCopyTool:
             # Create an individual cluster instance for each task so that they can run in parallel
             source_cluster = ResourceFactory.get_cluster_from_cluster_dict(self.config_helper.config['unloadSource'],self.region)
             source_table = TableResource(source_cluster, source.get_schema(), table)
-
             destination_cluster = ResourceFactory.get_cluster_from_cluster_dict(self.config_helper.config['copyTarget'], self.region)
             target_table = ResourceFactory.get_table_resource_from_merging_2_resources(destination, source_table)
             target_table.set_cluster(destination_cluster)
-
-            if 'explicit_ids' in self.config_helper.config['copyTarget']:
-                if self.config_helper.config['copyTarget']['explicit_ids']:
-                    target_table.set_explicit_ids(True)
             self.add_table_migration(source_table, target_table, global_config_values)
 
     def add_table_migration(self, source, destination, global_config_values):
+        if 'explicit_ids' in self.config_helper.config['copyTarget']:
+            if self.config_helper.config['copyTarget']['explicit_ids']:
+                destination.set_explicit_ids(True)
+
         if global_config_values['connectionPreTest']:
             if not global_config_values['destinationTablePreTest']:
                 destination_cluster_pre_test = FailIfResourceClusterDoesNotExistsTask(resource=destination)
